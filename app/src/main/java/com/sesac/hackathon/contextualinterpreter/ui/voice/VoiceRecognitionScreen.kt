@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -23,19 +24,29 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.sesac.hackathon.contextualinterpreter.data.model.Emotion
 import com.sesac.hackathon.contextualinterpreter.ui.components.BottomNavigationBar
+import com.sesac.hackathon.contextualinterpreter.ui.main.MainViewModel
 import com.sesac.hackathon.contextualinterpreter.ui.theme.Black1E
 import com.sesac.hackathon.contextualinterpreter.ui.theme.BlueBackground
 import com.sesac.hackathon.contextualinterpreter.ui.theme.GrayBackground
 import com.sesac.hackathon.contextualinterpreter.ui.theme.GrayBorder
 import com.sesac.hackathon.contextualinterpreter.ui.theme.GrayText
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class ChatItem(
     val message: String,
@@ -45,12 +56,38 @@ data class ChatItem(
 )
 
 @Composable
-fun VoiceRecognitionScreen(navController: NavController) {
-    val chatItems = listOf(
-        ChatItem("안타까운 소식 들었습니다. 유감이네요.", "오후 07:36", "부정"),
-        ChatItem("그 일에 대해서는 서로 오해했던 것을\n알고 잘 풀었습니다. 걱정 감사합니다.", "오후 07:37", "중립"),
-        ChatItem("오해였다니 다행입니다.", "오후 07:38", "긍정")
-    )
+fun VoiceRecognitionScreen(
+    navController: NavController,
+    viewModel: MainViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val listState = rememberLazyListState()
+
+    // Map domain model to UI model
+    val chatItems = uiState.conversationItems.map { item ->
+        val sentiment = when (item.emotion) {
+            Emotion.HAPPY -> "긍정"
+            Emotion.SAD, Emotion.FEAR, Emotion.ANGRY -> "부정"
+            else -> "중립"
+        }
+        
+        val timeFormat = SimpleDateFormat("a hh:mm", Locale.KOREA)
+        val timeStr = timeFormat.format(Date(item.timestamp))
+
+        ChatItem(
+            message = item.text,
+            time = timeStr,
+            sentiment = sentiment,
+            isMe = item.isUser
+        )
+    }
+
+    // Auto-scroll to bottom when new items arrive
+    LaunchedEffect(chatItems.size) {
+        if (chatItems.isNotEmpty()) {
+            listState.animateScrollToItem(chatItems.size - 1)
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -115,6 +152,7 @@ fun VoiceRecognitionScreen(navController: NavController) {
 
             // Chat List
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 33.dp, vertical = 24.dp),
@@ -172,7 +210,7 @@ fun ChatItemCard(item: ChatItem) {
                 text = item.message,
                 fontSize = 16.sp,
                 color = Black1E,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(

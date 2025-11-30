@@ -24,6 +24,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,8 +34,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.sesac.hackathon.contextualinterpreter.data.model.DangerLevel
 import com.sesac.hackathon.contextualinterpreter.ui.components.BottomNavigationBar
+import com.sesac.hackathon.contextualinterpreter.ui.main.MainViewModel
 import com.sesac.hackathon.contextualinterpreter.ui.theme.Black1E
 import com.sesac.hackathon.contextualinterpreter.ui.theme.Blue00
 import com.sesac.hackathon.contextualinterpreter.ui.theme.GrayText
@@ -51,12 +56,45 @@ data class SoundItem(
 )
 
 @Composable
-fun SoundAwarenessScreen(navController: NavController) {
-    val soundItems = listOf(
-        SoundItem("초인종", "9초 전", "왼쪽 뒤 5m", false, Blue00, Blue00),
-        SoundItem("경적", "36초 전", "오른쪽 앞 17m", true, RedC8, RedC8),
-        SoundItem("사이렌", "1시간 전", "왼쪽 뒤 5m", true, RedC8, RedC8)
-    )
+fun SoundAwarenessScreen(
+    navController: NavController,
+    viewModel: MainViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    // Map domain model to UI model
+    // Note: In a real app, this mapping might happen in the ViewModel or a UseCase.
+    // For this prototype, we do it here to keep the ViewModel simple as requested.
+    val soundItems = uiState.soundEvents.map { event ->
+        val isUrgent = event.dangerLevel == DangerLevel.HIGH
+        val color = if (isUrgent) RedC8 else Blue00
+        
+        // Calculate time ago (simplified)
+        val timeDiff = System.currentTimeMillis() - event.timestamp
+        val timeAgo = when {
+            timeDiff < 60000 -> "${timeDiff / 1000}초 전"
+            timeDiff < 3600000 -> "${timeDiff / 60000}분 전"
+            else -> "${timeDiff / 3600000}시간 전"
+        }
+
+        // Calculate direction string (simplified)
+        val directionStr = when {
+            event.directionAngle in 315f..360f || event.directionAngle in 0f..45f -> "앞"
+            event.directionAngle in 45f..135f -> "오른쪽"
+            event.directionAngle in 135f..225f -> "뒤"
+            else -> "왼쪽"
+        }
+        val distanceStr = "${event.distance.toInt()}m"
+
+        SoundItem(
+            name = event.label,
+            timeAgo = timeAgo,
+            direction = "$directionStr $distanceStr",
+            isUrgent = isUrgent,
+            iconColor = color,
+            borderColor = color
+        )
+    }.reversed() // Show newest first
 
     Scaffold(
         bottomBar = {
